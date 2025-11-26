@@ -171,11 +171,94 @@
             background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         }
         
+        .sync-button.smart {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            font-size: 1rem;
+            padding: 1rem;
+        }
+        
         .loading {
             text-align: center;
             color: white;
             font-size: 1.5rem;
             padding: 3rem;
+        }
+        
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .modal-header {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        
+        .modal-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+        
+        .modal-close:hover {
+            background: #f0f0f0;
+            color: #333;
         }
         
         @media (max-width: 768px) {
@@ -185,6 +268,10 @@
             
             .events-grid {
                 grid-template-columns: 1fr;
+            }
+            
+            .modal-content {
+                padding: 1.5rem;
             }
         }
     </style>
@@ -203,6 +290,17 @@
         
         <div id="events" class="events-grid">
             <div class="loading">Loading events...</div>
+        </div>
+    </div>
+    
+    <!-- Calendar Selection Modal -->
+    <div id="calendarModal" class="modal">
+        <div class="modal-content" style="position: relative;">
+            <button class="modal-close" onclick="closeModal()">×</button>
+            <div class="modal-header">Choose Your Calendar</div>
+            <div class="modal-options" id="modalOptions">
+                <!-- Options will be inserted here -->
+            </div>
         </div>
     </div>
     
@@ -410,7 +508,10 @@
                         </div>
                     </div>
                     <div class="sync-buttons">
-                        <div class="button-group-label">Add to Calendar:</div>
+                        <button class="sync-button smart" onclick="smartAddToCalendar('${event.id}')">
+                            <span>📅 Add to Calendar</span>
+                        </button>
+                        <div class="button-group-label" style="margin-top: 0.5rem;">Or choose manually:</div>
                         <button class="sync-button google" onclick="addToGoogle('${event.id}')">
                             <span>📅 Google Calendar</span>
                         </button>
@@ -433,10 +534,153 @@
             document.getElementById('stats').innerHTML = `📊 ${events.length} Events Available`;
         }
         
+        // Detect user's device/OS
+        function detectDevice() {
+            const userAgent = navigator.userAgent.toLowerCase();
+            const platform = navigator.platform.toLowerCase();
+            
+            // iOS devices
+            if (/iphone|ipad|ipod/.test(userAgent)) {
+                return 'ios';
+            }
+            
+            // macOS
+            if (/mac/.test(platform) && !/(iphone|ipad|ipod)/.test(userAgent)) {
+                return 'macos';
+            }
+            
+            // Android
+            if (/android/.test(userAgent)) {
+                return 'android';
+            }
+            
+            // Windows
+            if (/win/.test(platform)) {
+                return 'windows';
+            }
+            
+            // Linux
+            if (/linux/.test(platform)) {
+                return 'linux';
+            }
+            
+            return 'unknown';
+        }
+        
+        // Smart add to calendar - detects device and redirects or shows options
+        function smartAddToCalendar(eventId) {
+            const event = events.find(e => e.id === eventId);
+            if (!event) return;
+            
+            const device = detectDevice();
+            
+            // Auto-redirect based on device
+            switch(device) {
+                case 'ios':
+                    // iOS - show modal with Apple Calendar and Google Calendar
+                    showCalendarModal(eventId, ['apple', 'google', 'outlook']);
+                    break;
+                    
+                case 'macos':
+                    // macOS - show modal with Apple Calendar and Google Calendar
+                    showCalendarModal(eventId, ['apple', 'google', 'outlook']);
+                    break;
+                    
+                case 'android':
+                    // Android - redirect to Google Calendar
+                    addToGoogle(eventId);
+                    break;
+                    
+                case 'windows':
+                    // Windows - show modal with Outlook and Google Calendar
+                    showCalendarModal(eventId, ['outlook', 'google', 'apple']);
+                    break;
+                    
+                default:
+                    // Unknown - show all options
+                    showCalendarModal(eventId, ['google', 'outlook', 'apple', 'download']);
+            }
+        }
+        
+        // Show calendar selection modal
+        function showCalendarModal(eventId, options) {
+            const modal = document.getElementById('calendarModal');
+            const modalOptions = document.getElementById('modalOptions');
+            
+            const optionButtons = {
+                'google': {
+                    label: '📅 Google Calendar',
+                    class: 'google',
+                    action: () => addToGoogle(eventId)
+                },
+                'apple': {
+                    label: '🍎 Apple Calendar',
+                    class: 'apple',
+                    action: () => addToApple(eventId)
+                },
+                'outlook': {
+                    label: '📧 Outlook Calendar',
+                    class: 'outlook',
+                    action: () => addToOutlook(eventId)
+                },
+                'download': {
+                    label: '⬇ Download ICS File',
+                    class: 'download',
+                    action: () => downloadEvent(eventId)
+                }
+            };
+            
+            modalOptions.innerHTML = options.map(option => `
+                <button class="sync-button ${optionButtons[option].class}" 
+                        onclick="handleModalOption('${option}', '${eventId}')">
+                    <span>${optionButtons[option].label}</span>
+                </button>
+            `).join('');
+            
+            modal.classList.add('show');
+        }
+        
+        // Handle modal option selection
+        function handleModalOption(option, eventId) {
+            closeModal();
+            
+            switch(option) {
+                case 'google':
+                    addToGoogle(eventId);
+                    break;
+                case 'apple':
+                    addToApple(eventId);
+                    break;
+                case 'outlook':
+                    addToOutlook(eventId);
+                    break;
+                case 'download':
+                    downloadEvent(eventId);
+                    break;
+            }
+        }
+        
+        // Close modal
+        function closeModal() {
+            const modal = document.getElementById('calendarModal');
+            modal.classList.remove('show');
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('calendarModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+        
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', () => {
             displayEvents();
             updateStats();
+            
+            // Log detected device for debugging
+            console.log('Detected device:', detectDevice());
         });
     </script>
 </body>
